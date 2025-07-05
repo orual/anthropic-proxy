@@ -1,0 +1,9 @@
+/target
+/result
+/result-lib
+.direnv
+.env
+.mcp.json
+/CLAUDE.md.local
+
+/.pre-commit-config.yaml

@@ -1,0 +1,58 @@
+[package]
+authors = ["Orual <orual@nonbinary.computer>"]
+edition = "2021"
+# If you change the name here, you must also do it in flake.nix (and run `cargo generate-lockfile` afterwards)
+name = "anthropic-proxy"
+description = "A simple Rust project using Nix"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# Web framework
+axum = { version = "0.7", features = ["tokio", "http2", "macros"] }
+axum-extra = { version = "0.9", features = ["cookie", "typed-header"] }
+tower = { version = "0.4", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "timeout", "limit"] }
+tower-sessions = { version = "0.12", features = ["signed"] }
+
+# HTTP client
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_urlencoded = "0.7"
+
+# Security
+base64 = "0.22"
+rand = "0.8"
+sha2 = "0.10"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Environment and config
+dotenvy = "0.15"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# URL handling
+url = "2.5"
+
+# Utils
+uuid = { version = "1.10", features = ["v4"] }
+bytes = "1.8"
+
+[dev-dependencies]
+# For examples only
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "cookies"] }
