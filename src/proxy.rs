@@ -302,43 +302,27 @@ fn modify_cache_control(json: &mut serde_json::Value) {
             }
 
             // Collect indices of last 2 non-"system" messages
-            let mut nonsystem_indices = vec![];
-            for (i, msg) in messages_array.iter().enumerate().rev() {
-                if msg.get("role") != Some(&Value::String("system".to_string())) {
-                    nonsystem_indices.push(i);
-                    if nonsystem_indices.len() == 2 {
-                        break;
-                    }
-                }
-            }
+            //let mut nonsystem_indices = vec![];
+            // for (i, msg) in messages_array.iter().enumerate().rev() {
+            //     if msg.get("role") != Some(&Value::String("system".to_string())) {
+            //         nonsystem_indices.push(i);
+            //         if nonsystem_indices.len() == 2 {
+            //             break;
+            //         }
+            //     }
+            // }
 
             // Merge and deduplicate indices
             let mut indices: HashSet<usize> = system_indices.into_iter().collect();
-            indices.extend(nonsystem_indices);
+            //indices.extend(nonsystem_indices);
 
             // Update each selected message
             for idx in indices {
                 if let Some(msg) = messages_array.get_mut(idx) {
-                    // providerMetadata.anthropic.cacheControl = { "type": "ephemeral" }
-                    // Create or update the nested structure
-                    let cache_control = json!({ "type": "ephemeral" });
-                    let anthropic = json!({ "cacheControl": cache_control });
-
-                    // Drill down to providerMetadata
-                    let provider_metadata = msg
-                        .get_mut("providerMetadata")
-                        .and_then(|v| v.as_object_mut());
-                    if let Some(meta) = provider_metadata {
-                        meta.insert("anthropic".to_string(), anthropic);
-                    } else {
-                        // Insert providerMetadata if missing
-                        msg.as_object_mut().map(|map| {
-                            map.insert(
-                                "providerMetadata".to_string(),
-                                json!({ "anthropic": { "cacheControl": { "type": "ephemeral" } } }),
-                            );
-                        });
-                    }
+                    // Insert cache_control if missing
+                    msg.as_object_mut().map(|map| {
+                        map.insert("cache_control".to_string(), json!({"type": "ephemeral" }));
+                    });
                 }
             }
         }
