@@ -116,7 +116,11 @@ pub async fn proxy_handler(
     );
 
     // Add the OAuth beta header
-    req_builder = req_builder.header("anthropic-beta", "oauth-2025-04-20");
+
+    req_builder = req_builder.header(
+        "anthropic-beta",
+        "oauth-2025-04-20,computer-use-2025-01-24,fine-grained-tool-streaming-2025-05-14",
+    );
 
     // Debug log all headers being sent
     debug!("Request headers being sent to Anthropic:");
