@@ -14,7 +14,8 @@ use axum_extra::extract::CookieJar;
 use bytes::Bytes;
 use chrono::{Duration, Utc};
 use reqwest::header::HeaderName;
-use std::str::FromStr;
+use serde_json::{json, Value};
+use std::{collections::HashSet, str::FromStr};
 use tracing::{debug, error, info, warn};
 
 pub async fn proxy_handler(
@@ -154,7 +155,7 @@ pub async fn proxy_handler(
                 );
 
                 // Strip cache_control to prevent extra token usage (as per OpenCode fix)
-                strip_cache_control(&mut json_body);
+                modify_cache_control(&mut json_body);
 
                 // Prepend Claude Code identification to system prompt array
                 let claude_code_obj = serde_json::json!({
@@ -283,48 +284,67 @@ fn should_forward_response_header(header: &str) -> bool {
     !blocked_headers.contains(&header_lower.as_str())
 }
 
-// Strip cache_control from messages to prevent extra token usage
+// Modify cacheControl in messages to prevent extra token usage
 // Based on OpenCode's fix: https://github.com/sst/opencode/commit/1684042fb6ca1ff1e9d323469a9d913821b5af2e
-fn strip_cache_control(json: &mut serde_json::Value) {
-    // Remove cache_control from top level
-    if let Some(obj) = json.as_object_mut() {
-        obj.remove("cache_control");
-    }
-
+fn modify_cache_control(json: &mut serde_json::Value) {
     // Remove cache_control from messages array
     if let Some(messages) = json.get_mut("messages") {
         if let Some(messages_array) = messages.as_array_mut() {
-            for message in messages_array {
-                if let Some(message_obj) = message.as_object_mut() {
-                    message_obj.remove("cache_control");
+            // Collect indices of first 2 "system" messages
+            let mut system_indices = vec![];
+            for (i, msg) in messages_array.iter().enumerate() {
+                if msg.get("role") == Some(&Value::String("system".to_string())) {
+                    system_indices.push(i);
+                    if system_indices.len() == 2 {
+                        break;
+                    }
+                }
+            }
 
-                    // Also check content array if it exists
-                    if let Some(content) = message.get_mut("content") {
-                        if let Some(content_array) = content.as_array_mut() {
-                            for content_item in content_array {
-                                if let Some(content_obj) = content_item.as_object_mut() {
-                                    content_obj.remove("cache_control");
-                                }
-                            }
-                        }
+            // Collect indices of last 2 non-"system" messages
+            let mut nonsystem_indices = vec![];
+            for (i, msg) in messages_array.iter().enumerate().rev() {
+                if msg.get("role") != Some(&Value::String("system".to_string())) {
+                    nonsystem_indices.push(i);
+                    if nonsystem_indices.len() == 2 {
+                        break;
+                    }
+                }
+            }
+
+            // Merge and deduplicate indices
+            let mut indices: HashSet<usize> = system_indices.into_iter().collect();
+            indices.extend(nonsystem_indices);
+
+            // Update each selected message
+            for idx in indices {
+                if let Some(msg) = messages_array.get_mut(idx) {
+                    // providerMetadata.anthropic.cacheControl = { "type": "ephemeral" }
+                    // Create or update the nested structure
+                    let cache_control = json!({ "type": "ephemeral" });
+                    let anthropic = json!({ "cacheControl": cache_control });
+
+                    // Drill down to providerMetadata
+                    let provider_metadata = msg
+                        .get_mut("providerMetadata")
+                        .and_then(|v| v.as_object_mut());
+                    if let Some(meta) = provider_metadata {
+                        meta.insert("anthropic".to_string(), anthropic);
+                    } else {
+                        // Insert providerMetadata if missing
+                        msg.as_object_mut().map(|map| {
+                            map.insert(
+                                "providerMetadata".to_string(),
+                                json!({ "anthropic": { "cacheControl": { "type": "ephemeral" } } }),
+                            );
+                        });
                     }
                 }
             }
         }
     }
 
-    // Remove cache_control from system prompt if it's an array
-    if let Some(system) = json.get_mut("system") {
-        if let Some(system_array) = system.as_array_mut() {
-            for system_item in system_array {
-                if let Some(system_obj) = system_item.as_object_mut() {
-                    system_obj.remove("cache_control");
-                }
-            }
-        }
-    }
-
-    debug!("Stripped cache_control fields from request");
+    debug!("Modified cache_control fields from request");
 }
 
 #[cfg(test)]
