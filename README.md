@@ -11,8 +11,6 @@ A Rust-based OAuth proxy server for Anthropic's API, enabling OAuth authenticati
 - Session ID can be used as API key via `x-api-key` header
 - Automatic token refresh
 - API request proxying to Anthropic endpoints
-- Built with Axum (web framework) and Reqwest (HTTP client)
-- Full async/await support on Tokio runtime
 
 ## Prerequisites
 
