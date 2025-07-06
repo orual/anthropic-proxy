@@ -15,14 +15,6 @@ pub struct SessionData {
     pub api_key: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct OAuthCallback {
-    pub code: Option<String>,
-    pub state: Option<String>,
-    pub error: Option<String>,
-    pub error_description: Option<String>,
-}
-
 #[derive(Debug, Serialize)]
 pub struct TokenRequest {
     pub grant_type: String,

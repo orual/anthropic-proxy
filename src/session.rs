@@ -22,6 +22,12 @@ pub struct SessionStore {
     session_cache: Arc<RwLock<HashMap<String, CachedSession>>>,
 }
 
+impl Default for SessionStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SessionStore {
     pub fn new() -> Self {
         let persist_path =

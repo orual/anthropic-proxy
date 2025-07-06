@@ -14,20 +14,11 @@ pub enum AppError {
     #[error("Invalid OAuth state")]
     InvalidState,
 
-    #[error("OAuth error: {0}")]
-    OAuthError(String),
-
     #[error("Token exchange failed: {0}")]
     TokenExchangeError(String),
 
     #[error("Token refresh failed: {0}")]
     TokenRefreshError(String),
-
-    #[error("Configuration error: {0}")]
-    ConfigError(String),
-
-    #[error("Session error: {0}")]
-    SessionError(String),
 
     #[error("Proxy error: {0}")]
     ProxyError(String),
@@ -43,16 +34,10 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, self.to_string()),
-            AppError::InvalidState | AppError::OAuthError(_) => {
-                (StatusCode::BAD_REQUEST, self.to_string())
-            }
+            AppError::InvalidState => (StatusCode::BAD_REQUEST, self.to_string()),
             AppError::TokenExchangeError(_) | AppError::TokenRefreshError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Authentication failed".to_string(),
-            ),
-            AppError::ConfigError(_) | AppError::SessionError(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal server error".to_string(),
             ),
             AppError::ProxyError(_) | AppError::RequestError(_) => {
                 (StatusCode::BAD_GATEWAY, "Proxy error".to_string())

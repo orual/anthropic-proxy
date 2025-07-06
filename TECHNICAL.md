@@ -44,6 +44,15 @@ Sessions are managed through secure HTTP-only cookies:
 - Sessions are stored in-memory (consider Redis for production)
 - Session IDs are cryptographically random
 
+## Token Refresh
+
+The proxy automatically refreshes OAuth tokens when they are about to expire:
+- Checks token expiry 5 minutes before expiration
+- Automatically exchanges refresh token for new access token
+- Updates session with new tokens seamlessly
+- Continues request with refreshed token
+- Falls back gracefully if refresh fails
+
 ## Error Handling
 
 The proxy handles common OAuth errors:

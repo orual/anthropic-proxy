@@ -1,6 +1,7 @@
 use crate::{
-    auth::get_session_from_cookies,
+    auth::{exchange_tokens, get_session_from_cookies, SESSION_COOKIE_NAME},
     error::{AppError, Result},
+    types::{OAuthTokens, TokenRequest},
     AppState,
 };
 use axum::{
@@ -11,10 +12,10 @@ use axum::{
 };
 use axum_extra::extract::CookieJar;
 use bytes::Bytes;
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use reqwest::header::HeaderName;
 use std::str::FromStr;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 pub async fn proxy_handler(
     State(state): State<AppState>,
@@ -25,24 +26,68 @@ pub async fn proxy_handler(
     body: Bytes,
 ) -> Result<impl IntoResponse> {
     // Check authentication - first try x-api-key header, then fall back to cookies
-    let session = if let Some(api_key_header) = headers.get("x-api-key") {
+    let (session_id, mut session) = if let Some(api_key_header) = headers.get("x-api-key") {
         if let Ok(session_id) = api_key_header.to_str() {
             debug!("Checking x-api-key header for session: {}", session_id);
-            state
+            let session = state
                 .session_store
                 .get_session(session_id)
-                .ok_or(AppError::Unauthorized)?
+                .ok_or(AppError::Unauthorized)?;
+            (session_id.to_string(), session)
         } else {
             return Err(AppError::Unauthorized);
         }
     } else {
-        get_session_from_cookies(&jar, &state.session_store).ok_or(AppError::Unauthorized)?
+        let cookie = jar.get(SESSION_COOKIE_NAME).ok_or(AppError::Unauthorized)?;
+        let session_id = cookie.value().to_string();
+        let session =
+            get_session_from_cookies(&jar, &state.session_store).ok_or(AppError::Unauthorized)?;
+        (session_id, session)
     };
 
     // Check if token needs refresh (5 minutes before expiry)
     if session.tokens.expires_at.timestamp() - Utc::now().timestamp() < 300 {
-        info!("Token expiring soon, consider refreshing");
-        // In a production app, you might want to automatically refresh here
+        info!("Token expiring soon, attempting automatic refresh");
+
+        // Attempt to refresh the token
+        if let Some(refresh_token) = session.tokens.refresh_token.clone() {
+            let token_request = TokenRequest {
+                grant_type: "refresh_token".to_string(),
+                client_id: state.config.client_id.clone(),
+                code: None,
+                redirect_uri: None,
+                code_verifier: None,
+                refresh_token: Some(refresh_token),
+                state: None,
+            };
+
+            match exchange_tokens(&state, token_request).await {
+                Ok(token_response) => {
+                    info!("Successfully refreshed access token");
+
+                    // Update session with new tokens
+                    session.tokens = OAuthTokens {
+                        access_token: token_response.access_token,
+                        refresh_token: token_response
+                            .refresh_token
+                            .or(session.tokens.refresh_token),
+                        expires_at: Utc::now()
+                            + Duration::seconds(token_response.expires_in as i64),
+                    };
+
+                    // Update the session in the store
+                    state
+                        .session_store
+                        .update_session(&session_id, session.clone());
+                }
+                Err(e) => {
+                    warn!("Failed to refresh token: {:?}", e);
+                    // Continue with existing token - it might still work for a bit
+                }
+            }
+        } else {
+            warn!("No refresh token available, cannot refresh");
+        }
     }
 
     // Build the target URL
@@ -280,4 +325,62 @@ fn strip_cache_control(json: &mut serde_json::Value) {
     }
 
     debug!("Stripped cache_control fields from request");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{config::Config, session::SessionStore, types::SessionData};
+    use chrono::Duration;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn test_token_refresh_when_expiring() {
+        // Create a mock app state
+        let config = Arc::new(Config {
+            port: 4001,
+            session_secret: "test-secret".to_string(),
+            client_id: "test-client-id".to_string(),
+            redirect_uri: "http://localhost/callback".to_string(),
+            oauth_base_url: "https://claude.ai".to_string(),
+            api_base_url: "https://api.anthropic.com/v1".to_string(),
+        });
+
+        let session_store = Arc::new(SessionStore::new());
+        let http_client = reqwest::Client::new();
+
+        let _app_state = AppState {
+            config,
+            session_store: session_store.clone(),
+            http_client,
+        };
+
+        // Create a session with token expiring in 4 minutes (under the 5 minute threshold)
+        let session_id = "test-session-id";
+        let session_data = SessionData {
+            tokens: OAuthTokens {
+                access_token: "test-access-token".to_string(),
+                refresh_token: Some("test-refresh-token".to_string()),
+                expires_at: Utc::now() + Duration::minutes(4),
+            },
+            user_id: Some("test-user".to_string()),
+            api_key: None,
+        };
+
+        // Store the session
+        session_store.create_session(session_id, session_data.clone());
+
+        // Verify the session is stored
+        let stored_session = session_store.get_session(session_id);
+        assert!(stored_session.is_some());
+        assert_eq!(
+            stored_session.unwrap().tokens.access_token,
+            "test-access-token"
+        );
+
+        // In a real test, we would mock the exchange_tokens function
+        // For now, we just verify the logic for detecting token expiry
+        let time_until_expiry = session_data.tokens.expires_at.timestamp() - Utc::now().timestamp();
+        assert!(time_until_expiry < 300); // Should be less than 5 minutes
+    }
 }

@@ -112,11 +112,11 @@ cargo test test_oauth_flow
 ```
 src/
 ├── main.rs          # Server setup and routing
-├── auth.rs          # OAuth flow handlers (unused legacy endpoints)
+├── auth.rs          # OAuth token management and refresh
 ├── device_flow.rs   # Device authorization flow implementation
 ├── config.rs        # Configuration management
 ├── error.rs         # Error types and handling
-├── proxy.rs         # API request proxying
+├── proxy.rs         # API request proxying with automatic token refresh
 ├── session.rs       # Session store implementation
 └── types.rs         # Shared types and structs
 ```
@@ -167,7 +167,7 @@ See TECHNICAL.md for detailed implementation notes.
 - [x] Implement proper error types with thiserror
 - [x] Implement OAuth token compatibility
 - [ ] Add comprehensive test suite
-- [ ] Implement token refresh middleware
+- [x] Implement token refresh middleware
 - [ ] Add request/response logging
 - [ ] Create Docker container
 - [ ] Add metrics and monitoring

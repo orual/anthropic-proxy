@@ -10,7 +10,6 @@ use tower_http::trace::TraceLayer;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-mod api_key;
 mod auth;
 mod config;
 mod device_flow;
