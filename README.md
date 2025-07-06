@@ -8,6 +8,7 @@ A Rust-based OAuth proxy server for Anthropic's API, enabling OAuth authenticati
 
 - OAuth 2.0 authentication flow with PKCE for enhanced security
 - Secure session management with signed cookies
+- Session ID can be used as API key via `x-api-key` header
 - Automatic token refresh
 - API request proxying to Anthropic endpoints
 - Built with Axum (web framework) and Reqwest (HTTP client)
@@ -99,16 +100,14 @@ This proxy uses the device authorization flow, similar to how TV apps authentica
 
 Once authenticated, you can use any Anthropic API client by pointing it at the proxy:
 
-#### Python SDK
+#### Option 1: Using Session ID as API Key (Recommended)
 ```python
 from anthropic import Anthropic
 
+# Get your session ID from the proxy logs after authentication
 client = Anthropic(
     base_url="http://localhost:4001/v1",
-    api_key="dummy",  # Proxy uses session auth, not API keys
-    default_headers={
-        "Cookie": "anthropic_session=YOUR_SESSION_COOKIE"
-    }
+    api_key="12b8bbf5-493a-46ef-a69f-b8d6480a4f16"  # Your session ID
 )
 
 response = client.messages.create(
@@ -118,24 +117,44 @@ response = client.messages.create(
 )
 ```
 
-#### Node.js/TypeScript
-```javascript
-import Anthropic from '@anthropic-ai/sdk';
+#### Option 2: Using Cookies
+```python
+from anthropic import Anthropic
 
-const client = new Anthropic({
-  baseURL: 'http://localhost:4001/v1',
-  apiKey: 'dummy',  // Proxy uses session auth
-  defaultHeaders: {
-    'Cookie': 'anthropic_session=YOUR_SESSION_COOKIE'
-  }
-});
+client = Anthropic(
+    base_url="http://localhost:4001/v1",
+    api_key="dummy",  # Required but ignored
+    default_headers={
+        "Cookie": "anthropic_session=YOUR_SESSION_ID"
+    }
+)
 ```
 
-#### Getting Your Session Cookie
-After authenticating, the session cookie is set in your browser. You can:
+#### Integration with Tools (e.g., Zed Editor)
+Many tools that support custom API endpoints can use the proxy:
+
+```json
+{
+  "language_models": {
+    "anthropic": {
+      "api_url": "http://localhost:4001"
+    }
+  }
+}
+```
+
+Then set your session ID as the API key in the tool's configuration.
+
+#### Getting Your Session ID
+After authenticating, your session ID is shown in the proxy logs:
+```
+Session cookie created: anthropic_session=12b8bbf5-493a-46ef-a69f-b8d6480a4f16
+```
+
+You can also:
 1. Check browser DevTools > Application > Cookies > localhost:4001 > anthropic_session
 2. Use the `/auth/status` endpoint to verify authentication
-3. Run the example client: `ANTHROPIC_SESSION=<cookie-value> cargo run --example client`
+3. Run the example client: `ANTHROPIC_SESSION=<session-id> cargo run --example client`
 
 ## API Endpoints
 

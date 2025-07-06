@@ -1,0 +1,24 @@
+{
+  "language_models": {
+    "anthropic": {
+      "api_url": "http://localhost:4001",
+      "available_models": [
+        {
+          "name": "claude-3-5-sonnet-20241022",
+          "display_name": "Claude 3.5 Sonnet",
+          "max_tokens": 200000
+        },
+        {
+          "name": "claude-3-5-haiku-20241022",
+          "display_name": "Claude 3.5 Haiku",
+          "max_tokens": 200000
+        },
+        {
+          "name": "claude-3-opus-20240229",
+          "display_name": "Claude 3 Opus",
+          "max_tokens": 200000
+        }
+      ]
+    }
+  }
+}

@@ -46,9 +46,15 @@ async fn main() -> Result<()> {
     // Initialize session store
     let session_store = Arc::new(SessionStore::new());
 
+    // Log session storage location
+    if let Some(data_dir) = dirs::data_local_dir() {
+        let session_path = data_dir.join("anthropic-proxy").join("sessions.json");
+        info!("Sessions will be persisted to: {}", session_path.display());
+    }
+
     // Create HTTP client for proxying requests
     let http_client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
+        .timeout(std::time::Duration::from_secs(300)) // 5 minutes for long Claude responses
         .user_agent("Claude Code/1.0")
         .build()?;
 

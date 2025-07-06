@@ -24,9 +24,20 @@ pub async fn proxy_handler(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<impl IntoResponse> {
-    // Check authentication
-    let session =
-        get_session_from_cookies(&jar, &state.session_store).ok_or(AppError::Unauthorized)?;
+    // Check authentication - first try x-api-key header, then fall back to cookies
+    let session = if let Some(api_key_header) = headers.get("x-api-key") {
+        if let Ok(session_id) = api_key_header.to_str() {
+            debug!("Checking x-api-key header for session: {}", session_id);
+            state
+                .session_store
+                .get_session(session_id)
+                .ok_or(AppError::Unauthorized)?
+        } else {
+            return Err(AppError::Unauthorized);
+        }
+    } else {
+        get_session_from_cookies(&jar, &state.session_store).ok_or(AppError::Unauthorized)?
+    };
 
     // Check if token needs refresh (5 minutes before expiry)
     if session.tokens.expires_at.timestamp() - Utc::now().timestamp() < 300 {
@@ -91,6 +102,15 @@ pub async fn proxy_handler(
         // For messages endpoint, inject the Claude Code system prompt
         if path.contains("messages") {
             if let Ok(mut json_body) = serde_json::from_slice::<serde_json::Value>(&body) {
+                // Log the original request for debugging
+                debug!(
+                    "Original request body: {}",
+                    serde_json::to_string_pretty(&json_body).unwrap_or_default()
+                );
+
+                // Strip cache_control to prevent extra token usage (as per OpenCode fix)
+                strip_cache_control(&mut json_body);
+
                 // Prepend Claude Code identification to system prompt array
                 let claude_code_obj = serde_json::json!({
                     "type": "text",
@@ -216,4 +236,48 @@ fn should_forward_response_header(header: &str) -> bool {
     ];
 
     !blocked_headers.contains(&header_lower.as_str())
+}
+
+// Strip cache_control from messages to prevent extra token usage
+// Based on OpenCode's fix: https://github.com/sst/opencode/commit/1684042fb6ca1ff1e9d323469a9d913821b5af2e
+fn strip_cache_control(json: &mut serde_json::Value) {
+    // Remove cache_control from top level
+    if let Some(obj) = json.as_object_mut() {
+        obj.remove("cache_control");
+    }
+
+    // Remove cache_control from messages array
+    if let Some(messages) = json.get_mut("messages") {
+        if let Some(messages_array) = messages.as_array_mut() {
+            for message in messages_array {
+                if let Some(message_obj) = message.as_object_mut() {
+                    message_obj.remove("cache_control");
+
+                    // Also check content array if it exists
+                    if let Some(content) = message.get_mut("content") {
+                        if let Some(content_array) = content.as_array_mut() {
+                            for content_item in content_array {
+                                if let Some(content_obj) = content_item.as_object_mut() {
+                                    content_obj.remove("cache_control");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Remove cache_control from system prompt if it's an array
+    if let Some(system) = json.get_mut("system") {
+        if let Some(system_array) = system.as_array_mut() {
+            for system_item in system_array {
+                if let Some(system_obj) = system_item.as_object_mut() {
+                    system_obj.remove("cache_control");
+                }
+            }
+        }
+    }
+
+    debug!("Stripped cache_control fields from request");
 }
