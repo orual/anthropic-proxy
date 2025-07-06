@@ -154,9 +154,6 @@ pub async fn proxy_handler(
                     serde_json::to_string_pretty(&json_body).unwrap_or_default()
                 );
 
-                // Strip cache_control to prevent extra token usage (as per OpenCode fix)
-                modify_cache_control(&mut json_body);
-
                 // Prepend Claude Code identification to system prompt array
                 let claude_code_obj = serde_json::json!({
                     "type": "text",
@@ -185,6 +182,9 @@ pub async fn proxy_handler(
                         debug!("Created new system array with Claude Code prompt");
                     }
                 }
+
+                // Modify cache_control to prevent extra token usage (as per OpenCode fix)
+                modify_cache_control(&mut json_body);
 
                 if let Ok(modified_body) = serde_json::to_vec(&json_body) {
                     req_builder = req_builder.body(modified_body);
