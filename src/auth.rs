@@ -7,7 +7,7 @@ use crate::{
 use axum::{
     extract::{Query, State},
     http::header,
-    response::{IntoResponse, Redirect, Response},
+    response::{IntoResponse, Redirect},
     Json,
 };
 use axum_extra::extract::CookieJar;

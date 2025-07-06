@@ -16,7 +16,6 @@ use axum::{
 use axum_extra::extract::CookieJar;
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::to_string;
 use tracing::{debug, info, warn};
 
 #[derive(Debug, Serialize)]
